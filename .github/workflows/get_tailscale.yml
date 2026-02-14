@@ -5,7 +5,7 @@ on:
 
 jobs:
   build:
-    runs-on: macos-13  # 使用 Intel runner，生成 amd64 二进制
+    runs-on: macos-13  # 使用正确的 Intel runner 标签
     steps:
       - name: Install Tailscale (Old Version)
         uses: tailscale/github-action@v4
@@ -16,13 +16,10 @@ jobs:
       - name: Package binaries
         run: |
           set -x
-          # 打包常见路径下的文件
           tar -czvf tailscale-binaries.tar.gz /usr/local/bin/tailscale* /usr/local/sbin/tailscale* 2>/dev/null || true
-          # 如果为空则全盘查找
           if [ ! -s tailscale-binaries.tar.gz ]; then
             find / -type f \( -name "tailscale" -o -name "tailscaled" \) -print0 2>/dev/null | xargs -0 tar -czvf tailscale-binaries.tar.gz 2>/dev/null || true
           fi
-          # 检查结果
           if [ -s tailscale-binaries.tar.gz ]; then
             echo "成功创建 tailscale-binaries.tar.gz，大小: $(du -h tailscale-binaries.tar.gz | cut -f1)"
           else
@@ -35,7 +32,7 @@ jobs:
           name: tailscale-1.70.0-macos-binaries
           path: tailscale-binaries.tar.gz
           if-no-files-found: warn
-        continue-on-error: true  # 即使上传失败也不中断
+        continue-on-error: true
 
       - name: Output binaries as base64 (backup download)
         if: always()
@@ -44,7 +41,7 @@ jobs:
             echo "========================================="
             echo "BASE64 ENCODED FILE (COPY BELOW THIS LINE)"
             echo "========================================="
-            base64 -i tailscale-binaries.tar.gz   # 修正：使用 -i 参数
+            base64 -i tailscale-binaries.tar.gz
             echo "========================================="
             echo "END OF BASE64 ENCODED FILE"
             echo "保存以上内容（包括 BEGIN/END 行）为 tailscale.txt，然后运行：base64 -d tailscale.txt > tailscale-binaries.tar.gz"
