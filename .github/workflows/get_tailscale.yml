@@ -7,7 +7,7 @@ jobs:
   build:
     runs-on: macos-latest
     steps:
-      # 使用原来的 Auth Key 认证
+      # 使用 Auth Key 认证安装旧版 Tailscale
       - name: Install Tailscale (Old Version)
         uses: tailscale/github-action@v4
         with:
@@ -22,17 +22,17 @@ jobs:
             find / -name "tailscale" -o -name "tailscaled" 2>/dev/null | xargs tar -czvf tailscale-binaries.tar.gz 2>/dev/null || true
           fi
 
-      # 上传工件（仍然尝试，但可能失败）
+      # 上传工件 - 使用最新的 v4 版本
       - name: Upload binaries as artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: tailscale-1.70.0-macos-binaries
           path: tailscale-binaries.tar.gz
           if-no-files-found: warn
 
-      # 新增：将文件以 base64 形式输出到日志（备用下载方式）
+      # 备用：将文件以 base64 形式输出到日志
       - name: Output binaries as base64 (backup download)
-        if: always()  # 即使前面的步骤失败也运行
+        if: always()
         run: |
           if [ -f tailscale-binaries.tar.gz ]; then
             echo "========================================="
