@@ -5,7 +5,7 @@ on:
 
 jobs:
   build:
-    runs-on: macos-14  # 使用正确的 Intel runner 标签
+    runs-on: macos-15-intel  # 使用正确的 Intel runner 标签
     steps:
       - name: Install Tailscale (Old Version)
         uses: tailscale/github-action@v4
