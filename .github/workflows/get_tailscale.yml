@@ -5,55 +5,38 @@ on:
 
 jobs:
   build:
-    runs-on: macos-latest
+    runs-on: macos-13  # 使用 Intel runner，生成 amd64 二进制
     steps:
-      # 使用 Auth Key 认证安装旧版 Tailscale
       - name: Install Tailscale (Old Version)
         uses: tailscale/github-action@v4
         with:
           authkey: ${{ secrets.TAILSCALE_AUTHKEY }}
           version: "1.70.0"
 
-      # 打包二进制文件（带详细调试信息）
       - name: Package binaries
         run: |
-          set -x  # 打印执行的每一行命令
-          # 检查 tailscale 命令是否可用
-          if command -v tailscale &> /dev/null; then
-            echo "tailscale 命令路径: $(which tailscale)"
-            ls -l $(which tailscale)
-          else
-            echo "tailscale 命令未找到"
-          fi
-
-          # 尝试从标准路径打包
-          echo "尝试从 /usr/local/bin 和 /usr/local/sbin 打包..."
-          tar -czvf tailscale-binaries.tar.gz /usr/local/bin/tailscale* /usr/local/sbin/tailscale* 2>/dev/null && echo "从标准路径打包成功" || echo "标准路径打包失败"
-
-          # 如果标准路径打包失败或文件为空，则全盘查找
+          set -x
+          # 打包常见路径下的文件
+          tar -czvf tailscale-binaries.tar.gz /usr/local/bin/tailscale* /usr/local/sbin/tailscale* 2>/dev/null || true
+          # 如果为空则全盘查找
           if [ ! -s tailscale-binaries.tar.gz ]; then
-            echo "标准路径未找到文件，开始全盘查找..."
-            # 使用 find 查找所有名为 tailscale 或 tailscaled 的普通文件，并用 xargs 打包
-            find / -type f \( -name "tailscale" -o -name "tailscaled" \) -print0 2>/dev/null | xargs -0 tar -czvf tailscale-binaries.tar.gz 2>/dev/null && echo "全盘查找打包成功" || echo "全盘查找打包失败"
+            find / -type f \( -name "tailscale" -o -name "tailscaled" \) -print0 2>/dev/null | xargs -0 tar -czvf tailscale-binaries.tar.gz 2>/dev/null || true
           fi
-
-          # 最终检查
+          # 检查结果
           if [ -s tailscale-binaries.tar.gz ]; then
             echo "成功创建 tailscale-binaries.tar.gz，大小: $(du -h tailscale-binaries.tar.gz | cut -f1)"
           else
             echo "错误：未能创建 tailscale-binaries.tar.gz"
           fi
 
-      # 上传工件 - 仍然尝试，但已知可能失败
       - name: Upload binaries as artifact
         uses: actions/upload-artifact@v4
         with:
           name: tailscale-1.70.0-macos-binaries
           path: tailscale-binaries.tar.gz
           if-no-files-found: warn
-        continue-on-error: true  # 即使上传失败也不中断工作流
+        continue-on-error: true  # 即使上传失败也不中断
 
-      # 备用：将文件以 base64 形式输出到日志
       - name: Output binaries as base64 (backup download)
         if: always()
         run: |
@@ -61,7 +44,7 @@ jobs:
             echo "========================================="
             echo "BASE64 ENCODED FILE (COPY BELOW THIS LINE)"
             echo "========================================="
-            base64 tailscale-binaries.tar.gz
+            base64 -i tailscale-binaries.tar.gz   # 修正：使用 -i 参数
             echo "========================================="
             echo "END OF BASE64 ENCODED FILE"
             echo "保存以上内容（包括 BEGIN/END 行）为 tailscale.txt，然后运行：base64 -d tailscale.txt > tailscale-binaries.tar.gz"
