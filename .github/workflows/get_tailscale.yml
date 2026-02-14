@@ -7,32 +7,41 @@ jobs:
   build:
     runs-on: macos-latest
     steps:
-      # 使用 OAuth 客户端认证安装旧版 Tailscale
+      # 使用原来的 Auth Key 认证
       - name: Install Tailscale (Old Version)
         uses: tailscale/github-action@v4
         with:
-          oauth-client-id: ${{ secrets.TAILSCALE_CLIENT_ID }}
-          oauth-client-secret: ${{ secrets.TAILSCALE_CLIENT_SECRET }}
-          version: "1.70.0"  # 请确保这是您需要的版本号
+          authkey: ${{ secrets.TAILSCALE_AUTHKEY }}
+          version: "1.70.0"
 
-      # 打包二进制文件（增强健壮性，防止文件路径不存在）
+      # 打包二进制文件
       - name: Package binaries
         run: |
-          # 尝试打包常见路径下的文件，忽略错误
           tar -czvf tailscale-binaries.tar.gz /usr/local/bin/tailscale* /usr/local/sbin/tailscale* 2>/dev/null || true
-          # 如果上述路径为空，则尝试全盘查找（增加成功率）
           if [ ! -s tailscale-binaries.tar.gz ]; then
             find / -name "tailscale" -o -name "tailscaled" 2>/dev/null | xargs tar -czvf tailscale-binaries.tar.gz 2>/dev/null || true
           fi
-          # 如果仍无文件，输出警告但不中断工作流
-          if [ ! -s tailscale-binaries.tar.gz ]; then
-            echo "警告：未找到 tailscale 二进制文件"
-          fi
 
-      # 上传工件（使用 v3 版本更稳定）
+      # 上传工件（仍然尝试，但可能失败）
       - name: Upload binaries as artifact
         uses: actions/upload-artifact@v3
         with:
           name: tailscale-1.70.0-macos-binaries
           path: tailscale-binaries.tar.gz
-          if-no-files-found: warn  # 无文件时仅警告，不导致失败
+          if-no-files-found: warn
+
+      # 新增：将文件以 base64 形式输出到日志（备用下载方式）
+      - name: Output binaries as base64 (backup download)
+        if: always()  # 即使前面的步骤失败也运行
+        run: |
+          if [ -f tailscale-binaries.tar.gz ]; then
+            echo "========================================="
+            echo "BASE64 ENCODED FILE (COPY BELOW THIS LINE)"
+            echo "========================================="
+            base64 tailscale-binaries.tar.gz
+            echo "========================================="
+            echo "END OF BASE64 ENCODED FILE"
+            echo "保存以上内容（包括 BEGIN/END 行）为 tailscale.txt，然后运行：base64 -d tailscale.txt > tailscale-binaries.tar.gz"
+          else
+            echo "未找到 tailscale-binaries.tar.gz 文件"
+          fi
