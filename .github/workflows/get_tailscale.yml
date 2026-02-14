@@ -1,35 +1,38 @@
 name: Get Old Tailscale
 
 on:
-  # 你可以手动在 GitHub 网页上触发这个工作流
   workflow_dispatch:
 
 jobs:
   build:
-    # 使用 macos 环境运行，这样下载的就是 macOS 版
     runs-on: macos-latest
     steps:
-      # 关键步骤：使用 Tailscale 官方 Action，并指定旧版本号
+      # 使用 OAuth 客户端认证安装旧版 Tailscale
       - name: Install Tailscale (Old Version)
         uses: tailscale/github-action@v4
         with:
-          # 注意：这里需要提供认证信息，但我们只是为了下载文件
-          # 最简单的做法是先生成一个临时的、可复用的 Auth Key
-          # 请先访问 https://login.tailscale.com/admin/settings/keys 生成一个 Reusable 的 Auth Key
-          authkey: ${{ secrets.TAILSCALE_AUTHKEY }}
-          version: "1.70.0"  # 将这里修改为你需要的版本号，如 1.68.0, 1.66.0
+          oauth-client-id: ${{ secrets.TAILSCALE_CLIENT_ID }}
+          oauth-client-secret: ${{ secrets.TAILSCALE_CLIENT_SECRET }}
+          version: "1.70.0"  # 请确保这是您需要的版本号
 
-      # 这一步是为了让工作流持续运行一段时间，方便我们从运行环境中下载文件
-      - name: Keep alive to download files
+      # 打包二进制文件（增强健壮性，防止文件路径不存在）
+      - name: Package binaries
         run: |
-          echo "Tailscale 1.70.0 已安装"
-          echo "你可以通过 GitHub Actions 的工件功能来下载整个环境"
-          # 将 tailscale 二进制文件打包成工件
-          tar -czvf tailscale-binaries.tar.gz /usr/local/bin/tailscale* /usr/local/sbin/tailscale*
-        continue-on-error: true
+          # 尝试打包常见路径下的文件，忽略错误
+          tar -czvf tailscale-binaries.tar.gz /usr/local/bin/tailscale* /usr/local/sbin/tailscale* 2>/dev/null || true
+          # 如果上述路径为空，则尝试全盘查找（增加成功率）
+          if [ ! -s tailscale-binaries.tar.gz ]; then
+            find / -name "tailscale" -o -name "tailscaled" 2>/dev/null | xargs tar -czvf tailscale-binaries.tar.gz 2>/dev/null || true
+          fi
+          # 如果仍无文件，输出警告但不中断工作流
+          if [ ! -s tailscale-binaries.tar.gz ]; then
+            echo "警告：未找到 tailscale 二进制文件"
+          fi
 
+      # 上传工件（使用 v3 版本更稳定）
       - name: Upload binaries as artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v3
         with:
           name: tailscale-1.70.0-macos-binaries
           path: tailscale-binaries.tar.gz
+          if-no-files-found: warn  # 无文件时仅警告，不导致失败
